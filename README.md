@@ -15,6 +15,14 @@
 
 ## 编译
 
+* 二进制文件（已编译好）下载地址
+
+```bash
+wget https://github.com/yilingyi/docker-mirror/releases/download/1.0.0/docker-mirror-1.0.0-amd64.tar.gz
+```
+
+* 源码编译
+
 ```bash
 # 下载仓库代码
 git clone https://github.com/yilingyi/docker-mirror.git
