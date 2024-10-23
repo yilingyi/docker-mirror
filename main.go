@@ -140,7 +140,16 @@ func main() {
 			log.Fatalf("加载配置出错: %v", err)
 		}
 
-		targetImage := fmt.Sprintf("%s/%s/%s", config.Harbor.Domain, config.Harbor.Project, part[1])
+		imageName := ""
+		if len(part) == 1 {
+			// 如果镜像名称中没有斜杠，则直接使用它
+			imageName = part[0]
+		}else {
+			// 如果镜像名称中有斜杠，则使用斜杠后面的部分
+			imageName = part[1]
+		}
+
+		targetImage := fmt.Sprintf("%s/%s/%s", config.Harbor.Domain, config.Harbor.Project, imageName)
 
 		// 从配置的 Docker 镜像仓库地址拉取镜像
 		fmt.Printf("正在从 %s 拉取镜像 %s\n", config.DockerRegistry, sourceImage)
