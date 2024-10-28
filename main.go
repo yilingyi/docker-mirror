@@ -21,7 +21,7 @@ type Config struct {
 		Password string `yaml:"password"`
 		Project  string `yaml:"project"`
 	} `yaml:"harbor"`
-	DockerRegistry string `yaml:"docker_registry"`
+	DockerRegistries []string `yaml:"dockerRegistries"`
 }
 
 // GetConfigPath 返回配置文件的路径
@@ -85,8 +85,12 @@ func Configure(configFile string) error {
 		config.Harbor.Project = "public"
 	}
 
-	// 设置默认的 Docker 镜像仓库地址
-	config.DockerRegistry = "docker.m.daocloud.io"
+	// 预设 DockerRegistries 的默认值
+	config.DockerRegistries = []string{
+		"docker.m.daocloud.io",
+		"quay.m.daocloud.io",
+		"k8s.m.daocloud.io",
+	}
 
 	return SaveConfig(configFile, config)
 }
@@ -140,17 +144,50 @@ func main() {
 			log.Fatalf("加载配置出错: %v", err)
 		}
 
-		targetImage := fmt.Sprintf("%s/%s/%s", config.Harbor.Domain, config.Harbor.Project, part[1])
+		// 如果镜像名称中没有斜杠，则默认视为 library/镜像名称
+		if len(part) == 1 {
+			part = append([]string{"library"}, part[0])
+		}
 
-		// 从配置的 Docker 镜像仓库地址拉取镜像
-		fmt.Printf("正在从 %s 拉取镜像 %s\n", config.DockerRegistry, sourceImage)
-		if output, err := Execute("docker", "pull", fmt.Sprintf("%s/%s", config.DockerRegistry, sourceImage)); err != nil {
-			log.Fatalf("拉取镜像出错: %v\n%s", err, output)
+		targetImage := fmt.Sprintf("%s/%s/%s", config.Harbor.Domain, config.Harbor.Project, part[len(part)-1])
+
+		var pullErr error
+		var pulledRegistry string
+		if len(config.DockerRegistries) == 0 {
+			// 如果 DockerRegistries 为空，则直接拉取不带域名的镜像
+			fmt.Printf("正在拉取镜像 %s\n", sourceImage)
+			if output, err := Execute("docker", "pull", sourceImage); err != nil {
+				fmt.Printf("拉取镜像出错: %v\n%s", err, output)
+				pullErr = err
+			} else {
+				pullErr = nil
+				pulledRegistry = ""
+			}
+		} else {
+			for _, registry := range config.DockerRegistries {
+				// 从配置的 Docker 镜像仓库地址拉取镜像
+				fmt.Printf("正在从 %s 拉取镜像 %s\n", registry, sourceImage)
+				if output, err := Execute("docker", "pull", fmt.Sprintf("%s/%s", registry, sourceImage)); err != nil {
+					fmt.Printf("拉取镜像出错: %v\n%s", err, output)
+					pullErr = err
+				} else {
+					pullErr = nil
+					pulledRegistry = registry
+					break
+				}
+			}
+		}
+
+		if pullErr != nil {
+			log.Fatalf("从所有配置的 DockerRegistry 拉取镜像均失败")
 		}
 
 		// 将镜像标记为目标域名
+		if pulledRegistry != "" {
+			sourceImage = fmt.Sprintf("%s/%s", pulledRegistry, sourceImage)
+		}
 		fmt.Printf("正在将镜像 %s 标记为 %s\n", sourceImage, targetImage)
-		if output, err := Execute("docker", "tag", fmt.Sprintf("%s/%s", config.DockerRegistry, sourceImage), targetImage); err != nil {
+		if output, err := Execute("docker", "tag", sourceImage, targetImage); err != nil {
 			log.Fatalf("标记镜像出错: %v\n%s", err, output)
 		}
 
@@ -182,17 +219,39 @@ func main() {
 			log.Fatalf("加载配置出错: %v", err)
 		}
 
-		// 从配置的 Docker 镜像仓库地址拉取镜像
-		fmt.Printf("正在从 %s 拉取镜像 %s\n", config.DockerRegistry, sourceImage)
-		if output, err := Execute("docker", "pull", fmt.Sprintf("%s/%s", config.DockerRegistry, sourceImage)); err != nil {
-			log.Fatalf("拉取镜像出错: %v\n%s", err, output)
+		var pullErr error
+		if len(config.DockerRegistries) == 0 {
+			// 如果 DockerRegistries 为空，则直接拉取不带域名的镜像
+			fmt.Printf("正在拉取镜像 %s\n", sourceImage)
+			if output, err := Execute("docker", "pull", sourceImage); err != nil {
+				fmt.Printf("拉取镜像出错: %v\n%s", err, output)
+				pullErr = err
+			} else {
+				pullErr = nil
+			}
+		} else {
+			for _, registry := range config.DockerRegistries {
+				// 从配置的 Docker 镜像仓库地址拉取镜像
+				fmt.Printf("正在从 %s 拉取镜像 %s\n", registry, sourceImage)
+				if output, err := Execute("docker", "pull", fmt.Sprintf("%s/%s", registry, sourceImage)); err != nil {
+					fmt.Printf("拉取镜像出错: %v\n%s", err, output)
+					pullErr = err
+				} else {
+					pullErr = nil
+					break
+				}
+			}
+		}
+
+		if pullErr != nil {
+			log.Fatalf("从所有配置的 DockerRegistry 拉取镜像均失败")
 		}
 
 		fmt.Println("您的镜像已成功拉取到本地！")
 	case "help":
 		PrintHelp()
 	default:
-		fmt.Println("uknown:", command)
+		fmt.Println("unknown:", command)
 		PrintHelp()
 	}
 }

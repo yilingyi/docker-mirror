@@ -84,7 +84,7 @@ docker-mirror pull-local <镜像名称>
 
 * 配置管理
 
-在执行docker-mirror config初始化后，会生成配置文件~/.config/docker-mirror/config.yaml，存储相关信息
+在执行docker-mirror config初始化后，会生成配置文件~/.config/docker-mirror/config.yaml，存储相关信息，其中dockerRegistries支持配置多个加速仓库，也支持配置空值“`dockerRegistries: []`”，不走加速代理。
 
 ```bash
 harbor:
@@ -92,7 +92,10 @@ harbor:
   username: ******
   password: ******
   project: yilingyi
-docker_registry: docker.m.daocloud.io
+dockerRegistries:
+- docker.m.daocloud.io
+- quay.m.daocloud.io
+- k8s.m.daocloud.io
 ```
 
 ## **欢迎订阅我的公众号「SRE运维手记」**
